@@ -1,17 +1,30 @@
 package gui;
+/*
+ * TODO
+ *
+ *
+ *
+ */
 
+//
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 
+/**
+ * TODO
+ *
+ */
 public class WelcomeStage extends Application {
 
     private Stage primaryStage;
@@ -57,13 +70,16 @@ public class WelcomeStage extends Application {
         Button payrollButton = new Button("Payroll Calculator");
         payrollButton.setOnAction(event -> showPayrollScene());
 
+        Button taxCalculatorButton = new Button("Tax Calculator");
+        taxCalculatorButton.setOnAction(event -> showTaxCalculatorScene());
+
         Button expensesButton = new Button("Expenses Calculator");
         expensesButton.setOnAction(event -> showExpensesScene());
 
         Button exitButton = new Button("Exit");
         exitButton.setOnAction(event -> showExitScene());
 
-        VBox menuLayout = new VBox(20, menuLabel, payrollButton, expensesButton, exitButton);
+        VBox menuLayout = new VBox(20, menuLabel, payrollButton, taxCalculatorButton, expensesButton, exitButton);
         menuLayout.setPadding(new Insets(20));
         menuLayout.setStyle("-fx-alignment: center;");
 
@@ -73,78 +89,66 @@ public class WelcomeStage extends Application {
 
     // Menu that displays the payroll scene
     private void showPayrollScene() {
-        Label title = new Label("Payroll Calculator");
+        PayrollCalculatorView.show(primaryStage, this::showMenuScene);
+    }
 
-        // Pay type options
-        RadioButton hourlyRadio = new RadioButton("Hourly Pay");
-        RadioButton annualRadio = new RadioButton("Annual Pay");
-        ToggleGroup payTypeGroup = new ToggleGroup();
-        hourlyRadio.setToggleGroup(payTypeGroup);
-        annualRadio.setToggleGroup(payTypeGroup);
-        hourlyRadio.setSelected(true);
-
-        TextField payInput = new TextField();
-        payInput.setPromptText("Enter pay amount");
-
-        VBox payTypeBox = new VBox(10, hourlyRadio, annualRadio);
-        Button backButton = new Button("Back to Main Menu");
-        backButton.setOnAction(event -> showMenuScene());
-
-        VBox layout = new VBox(15, title, backButton);
-        layout.setPadding(new Insets(20));
-        layout.setStyle("-fx-alignment: center-left;");
-
-        Scene scene = new Scene(layout, 800, 600);
-        primaryStage.setScene(scene);
+    // Menu that displays the tax calculator scene
+    private void showTaxCalculatorScene() {
+        TaxCalculatorView.show(primaryStage, this::showMenuScene);
     }
 
     // Menu that displays the expenses scene
     private void showExpensesScene() {
-        Label title = new Label("Expenses Calculator");
+        ExpensesView view = new ExpensesView(
+                this::showMenuScene,
+                this::showCalculatingPopup
+        );
 
-        ComboBox<ExpenseCategory> categoryDropdown = new ComboBox<>();
-        categoryDropdown.getItems().addAll(ExpenseCategory.values());
-        categoryDropdown.setPromptText("Select expense category");
-
-        TextField descriptionInput = new TextField();
-        descriptionInput.setPromptText("Expense description");
-
-        TextField amountInput = new TextField();
-        amountInput.setPromptText("Amount");
-
-        DatePicker dueDatePicker = new DatePicker();
-        dueDatePicker.setPromptText("Due date (optional)");
-
-        Button backButton = new Button("Back to Main Menu");
-        backButton.setOnAction(event -> showMenuScene());
-
-        VBox layout = new VBox(15, title, backButton);
-        layout.setPadding(new Insets(20));
-        layout.setStyle("-fx-alignment: center-left;");
-
-        Scene scene = new Scene(layout, 800, 600);
+        Scene scene = new Scene(view, 800, 600);
         primaryStage.setScene(scene);
     }
 
     // Menu that displays the exit scene
     private void showExitScene() {
-        Label exitLabel = new Label("Thank you for using the Accounting App.\nGood Bye!!!!");
-        exitLabel.setStyle("-fx-font-size: 32px; -fx-font-weight: bold; -fx-text-alignment: center; -fx-font-family: 'Arial';");
+        ExitView.show(primaryStage);
+    }
 
-        StackPane exitLayout = new StackPane(exitLabel);
-        Scene exitScene = new Scene(exitLayout, 800, 600);
+    // Creates a button to return to the Main Menu
+    private Button createBackButton() {
+        Button backButton = new Button("Back to Main Menu");
+        backButton.setOnAction(event -> showMenuScene());
+        return backButton;
+    }
 
-        primaryStage.setScene(exitScene);
+    private Button createCalculateButton() {
+        Button calculateButton = new Button("Calculate");
+        calculateButton.setOnAction(e -> showCalculatingPopup());
+        return calculateButton;
+    }
 
-        // Wait 3 seconds, then exit
-        PauseTransition pause = new PauseTransition(Duration.seconds(3));
-        pause.setOnFinished(e -> {
-            System.out.println("Application exited.");
-            Platform.exit();  // Cleanly exit JavaFX
-            System.exit(0);   // Ensure JVM shuts down
-        });
+    private void showCalculatingPopup() {
+        Stage popup = new Stage();
+        popup.initModality(Modality.APPLICATION_MODAL);
+        popup.setTitle("Calculation");
+
+        Label message = new Label("Calculating...");
+        message.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+        VBox layout = new VBox(20, message);
+        layout.setAlignment(Pos.CENTER);
+        layout.setPadding(new Insets(20));
+
+        Scene scene = new Scene(layout, 250, 120);
+        popup.setScene(scene);
+
+        popup.show();
+
+        // Auto-close after 2 seconds
+        PauseTransition pause = new PauseTransition(Duration.seconds(2));
+        pause.setOnFinished(ev -> popup.close());
         pause.play();
     }
+
 
     // Main method that starts the GUI
     public static void main(String[] args) {

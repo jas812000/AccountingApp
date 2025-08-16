@@ -27,5 +27,10 @@ public record PayrollResult(
         double fica,      // SS + Medicare
         double other,     // "other" deductions
         double net
-) {}
+) {
+
+    public double annualPay(){
+        return hourlyRate * 2080;
+    }
+}
 

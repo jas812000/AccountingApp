@@ -16,7 +16,7 @@ public enum PaySchedule {
     public String displayName() {
         return switch (this) {
             case WEEKLY -> "Weekly";
-            case BI_WEEKLY -> "Bi-weekly";
+            case BI_WEEKLY -> "Bi-Weekly";
             case MONTHLY -> "Monthly";
         };
     }

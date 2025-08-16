@@ -13,6 +13,9 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import model.PaySchedule;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.function.UnaryOperator;
@@ -65,6 +68,11 @@ public final class PayrollCalculatorView extends VBox {
         hourlyRate.setPrefWidth(180);
         hoursInPeriod.setPrefWidth(220);
 
+        // --- Annual inputs ---
+        TextField annualSalaryField = new TextField();
+        annualSalaryField.setPromptText("Annual pay amount");
+        annualSalaryField.setPrefWidth(220);
+
         // simple numeric formatter w/ up to 2 decimals
         UnaryOperator<TextFormatter.Change> moneyFilter = ch -> {
             String s = ch.getControlNewText();
@@ -76,9 +84,14 @@ public final class PayrollCalculatorView extends VBox {
         };
         hourlyRate.setTextFormatter(new TextFormatter<>(moneyFilter));
         hoursInPeriod.setTextFormatter(new TextFormatter<>(moneyFilter));
+        annualSalaryField.setTextFormatter(new TextFormatter<>(moneyFilter));
 
         HBox hourlyInputsRow = new HBox(12, hourlyRate, hoursInPeriod);
         hourlyInputsRow.setAlignment(Pos.CENTER);
+
+        HBox annualInputRow = new HBox(12, annualSalaryField);
+        annualInputRow.setAlignment(Pos.CENTER);
+
 
         // --- Calculate & Back ---
         Button calcBtn = new Button("Calculate");
@@ -90,6 +103,7 @@ public final class PayrollCalculatorView extends VBox {
         resultsHeader.setStyle("-fx-font-weight: bold;");
 
         Label rHourly  = new Label("Hourly Pay: —");
+        Label rAnnual = new Label ("Annual Pay (Gross): —");
         Label rSched   = new Label("Pay Schedule: —");
         Label rHours   = new Label("Hours in Period: —");
         Label rGross   = new Label("Gross Pay: —");
@@ -99,7 +113,7 @@ public final class PayrollCalculatorView extends VBox {
         Label rNet     = new Label("Net Pay: —");
 
         VBox resultsBox = new VBox(6,
-                resultsHeader, rHourly, rSched, rHours, rGross,
+                resultsHeader, rHourly, rAnnual, rSched, rHours, rGross,
                 new Label("Deductions:"), rFed, rFica, rOther, rNet);
         resultsBox.setPadding(new Insets(12));
         resultsBox.setStyle("""
@@ -113,52 +127,127 @@ public final class PayrollCalculatorView extends VBox {
         // show/hide hourly section if needed (annual path TBD)
         Runnable updateVisibility = () -> {
             boolean hourly = hourlyRadio.isSelected();
-            scheduleRow.setVisible(hourly);
-            scheduleRow.setManaged(hourly);
+
+            scheduleRow.setVisible(true);
+            scheduleRow.setManaged(true);
+
             hourlyInputsRow.setVisible(hourly);
             hourlyInputsRow.setManaged(hourly);
+
+            annualInputRow.setVisible(!hourly);
+            annualInputRow.setManaged(!hourly);
         };
+
+        // Reset the fields when using the radio buttons
+        Runnable resetFields = () -> {
+            hourlyRate.clear();
+            hoursInPeriod.clear();
+            annualSalaryField.clear();
+
+            rHourly.setText("Hourly Pay: —");
+            rAnnual.setText("Annual Pay (Gross): —");
+            rSched.setText("Pay Schedule: —");
+            rHours.setText("Hours in Period: —");
+            rGross.setText("Gross Pay: —");
+            rFed.setText("Federal: —");
+            rFica.setText("FICA (SS + Medicare): —");
+            rOther.setText("Other Deductions: —");
+            rNet.setText("Net Pay: —");
+        };
+
         updateVisibility.run();
-        hourlyRadio.selectedProperty().addListener((o, a, b) -> updateVisibility.run());
-        annualRadio.selectedProperty().addListener((o, a, b) -> updateVisibility.run());
+        hourlyRadio.selectedProperty().addListener((o, a, b) -> {
+            updateVisibility.run();
+            resetFields.run();
+        });
+        annualRadio.selectedProperty().addListener((o, a, b) -> {
+            updateVisibility.run();
+            resetFields.run();
+        });
 
         // --- Calculate handler (Hourly only for now) ---
         calcBtn.setOnAction(e -> {
-            if (!hourlyRadio.isSelected()) return;
+            if (hourlyRadio.isSelected()) {
 
-            String rateText  = hourlyRate.getText().trim();
-            String hoursText = hoursInPeriod.getText().trim();
-            if (rateText.isBlank() || hoursText.isBlank()) return;
+                // --- Hourly Pay Calculation ---
+                String rateText = hourlyRate.getText().trim();
+                String hoursText = hoursInPeriod.getText().trim();
+                if (rateText.isBlank() || hoursText.isBlank()) return;
 
-            try {
-                double rate  = Double.parseDouble(rateText);
-                double hours = Double.parseDouble(hoursText);
+                try {
+                    double rate = Double.parseDouble(rateText);
+                    double hours = Double.parseDouble(hoursText);
 
-                model.PaySchedule schedule = weekly.isSelected() ? model.PaySchedule.WEEKLY
-                        : (biWeekly.isSelected() ? model.PaySchedule.BI_WEEKLY : model.PaySchedule.MONTHLY);
+                    model.PaySchedule schedule = weekly.isSelected() ? model.PaySchedule.WEEKLY
+                            : (biWeekly.isSelected() ? model.PaySchedule.BI_WEEKLY : model.PaySchedule.MONTHLY);
 
-                model.PayrollInputs inputs = new model.PayrollInputs(rate, hours, schedule);
-                model.PayrollResult result = model.PayrollCalculator.calculate(inputs);
+                    model.PayrollInputs inputs = new model.PayrollInputs(rate, hours, schedule);
+                    model.PayrollResult result = model.PayrollCalculator.calculateFromHourly(inputs);
 
-                NumberFormat cf = NumberFormat.getCurrencyInstance(Locale.US);
+                    NumberFormat cf = NumberFormat.getCurrencyInstance(Locale.US);
 
-                rHourly.setText("Hourly Pay: " + cf.format(result.hourlyRate()));
-                rSched.setText("Pay Schedule: " + result.schedule().displayName());
-                rHours.setText("Hours in Period: " +
-                        (result.hoursInPeriod() % 1 == 0
-                                ? String.format("%.0f", result.hoursInPeriod())
-                                : String.format("%.2f", result.hoursInPeriod())));
-                rGross.setText("Gross Pay: " + cf.format(result.gross()));
-                rFed.setText("Federal: —"); // cf.format(result.federal()) when implemented
-                rFica.setText("FICA (SS + Medicare): " + cf.format(result.fica()));
-                rOther.setText("Other Deductions: —"); // cf.format(result.other()) when used
-                rNet.setText("Net Pay: " + cf.format(result.net()));
+                    rHourly.setText("Hourly Pay: " + cf.format(result.hourlyRate()));
+                    rAnnual.setText("Annual Pay (Gross): " + cf.format(result.annualPay()));
+                    rSched.setText("Pay Schedule: " + result.schedule().displayName());
+                    rHours.setText("Hours in Period: " +
+                            (result.hoursInPeriod() % 1 == 0
+                                    ? String.format("%.0f", result.hoursInPeriod())
+                                    : String.format("%.2f", result.hoursInPeriod())));
+                    rGross.setText("Gross Pay: " + cf.format(result.gross()));
+                    rFed.setText("Federal: —"); // cf.format(result.federal()) when implemented
+                    rFica.setText("FICA (SS + Medicare): " + cf.format(result.fica()));
+                    rOther.setText("Other Deductions: —"); // cf.format(result.other()) when used
+                    rNet.setText("Net Pay: " + cf.format(result.net()) + " " + result.schedule().displayName());
 
-            } catch (NumberFormatException ignored) { /* show alert if desired */ }
+                } catch (NumberFormatException ex) {
+                    Alert alert = new Alert(AlertType.ERROR);
+                    alert.setTitle("Input Error");
+                    alert.setHeaderText("Invalid Hourly Pay Inputs");
+                    alert.setContentText("Please enter valid numeric values for hourly rate and hours worked.");
+                    alert.showAndWait();
+                }
+            } else {
+
+                // --- Annual Pay Calculation ---
+                String salaryText = annualSalaryField.getText().trim();
+                if (salaryText.isBlank()) return;
+
+                try {
+
+                    double annualSalary = Double.parseDouble(salaryText);
+
+                    model.PaySchedule schedule = weekly.isSelected() ? model.PaySchedule.WEEKLY
+                            : (biWeekly.isSelected() ? model.PaySchedule.BI_WEEKLY : model.PaySchedule.MONTHLY);
+
+                    model.PayrollResult result = model.PayrollCalculator.calculateFromAnnual(annualSalary, schedule);
+
+                    NumberFormat cf = NumberFormat.getCurrencyInstance(Locale.US);
+
+                    rHourly.setText("Hourly Pay: " + cf.format(result.hourlyRate()));
+                    rAnnual.setText("Annual Pay (Gross): " + cf.format(result.annualPay()));
+                    rSched.setText("Pay Schedule: " + result.schedule().displayName());
+                    rHours.setText("Hours in period: " +
+                            (result.hoursInPeriod() % 1 == 0
+                                    ? String.format("%.0f", result.hoursInPeriod())
+                                    : String.format("%.2f", result.hoursInPeriod())));
+                    rGross.setText("Gross Pay: " + cf.format(result.gross()));
+                    rFed.setText("Federal: -");
+                    rFica.setText("FICA (SS + Medicare): " + cf.format(result.fica()));
+                    rOther.setText("Other Deductions: -"); // cf.format(result.other()) when used
+                    rNet.setText("Net Pay: " + cf.format(result.net()) + " " + result.schedule().displayName());
+
+                } catch (NumberFormatException ex) {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Input Error");
+                    alert.setHeaderText("Invalid Annual Pay Input");
+                    alert.setContentText("Please enter a valid numeric value for the annual salary.");
+                    alert.showAndWait();
+                }
+            }
         });
 
         // --- Compose page ---
-        VBox page = new VBox(18, title, payTypeRow, scheduleRow, hourlyInputsRow, calcBtn, resultsBox, backBtn);
+        VBox page = new VBox(18, title, payTypeRow, scheduleRow, hourlyInputsRow, annualInputRow, calcBtn, resultsBox, backBtn);
         page.setAlignment(Pos.TOP_CENTER);
 
         BorderPane root = new BorderPane(page);
